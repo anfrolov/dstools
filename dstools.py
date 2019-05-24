@@ -40,7 +40,10 @@ def plot_feature_importance(model, feature_names, top=50):
         top (int): N of features, which will be shown on feature importances plot.
     
     Returns:
-        Plot with feature importances.
+        None.
+        
+    Note:
+        Function make a plot with feature importances.
     """
 
     import pandas as pd
@@ -70,8 +73,10 @@ def plot_roc_curve(test, predict, labels, figsize=(10,8)):
         figsize (tuple of int): Size of plot.
         
     Returns:
-        Plot with ROC curves and ROC-AUC scores.
-    
+        None.
+        
+    Note:
+        Function make a plot with ROC curves and ROC-AUC scores.
     """
     
     import numpy as np
@@ -106,7 +111,39 @@ def calculate_feature_importance(
     n_samples=-1, plot=True, top=30, save_to_file=True, filename='importances.csv', sep=';', decimal=',', 
     encoding='cp1251'):
     """
-    Calculate permutation importance for given dataset
+    Calculate permutation importance for given dataset.
+    
+    Parameters:
+        data (pandas DataFrame): Train dataset.
+        target (str): Column name with target values.
+        fillna (bool): If True - fill NA values by fill_val (by default).
+        fill_val (int, float, or str): Value for fill NA values.
+        test_size (float): Fraction of data, which will be used as test set for train model.
+        stratify_by_target (bool): If True - data will be splitted by target values.
+        shuffle (bool): Shuffle data before splitting.
+        random_state (int): Random state for model and splitting data.
+        features (list of str): List with feature names. If None - all columns except target will be used as features.
+        n_estimators (int): n_estimators parameter for RandomForestClassifier.
+        min_samples_leaf (int): min_samples_leaf parameter for RandomForestClassifier.
+        max_features (int): max_features parameter for RandomForestClassifier.
+        n_jobs (int): n_jobs parameter for RandomForestClassifier.
+        max_depth (int): max_depth parameter for RandomForestClassifier.
+        oob_score (int): oob_score parameter for RandomForestClassifier.
+        n_samples (int): n_samples parameter for rfpimp importance.
+        plot (bool): Plot graph with feature importances.
+        top (int): N of features, which will be shown on feature importances plot.
+        save_to_file (bool): Save feature importances to file.
+        filename (str): Filename with feature importances.
+        sep (str): Set separator for file with feature importances.
+        decimal (str): Set decimal delimiter for file with feature importances.
+        encoding (str): Set encoding for file with feature importances.
+    
+    Returns:
+        model (sklearn model): sklearn RandomForestClassifier, used for calculation of feature importances.
+        importance (pandas DataFrame): DataFrame with feature importances.
+    
+    Note:
+        If plot is True, function make a plot with feature importances.
     """
 
     import pandas as pd
@@ -153,8 +190,24 @@ def calculate_feature_importance(
 
 
 def plot_confusion_matrix(y_true, y_pred, prob=True, threshold=0.5, title='Confusion matrix', figsize=(6, 5)):
-    "Plot confusion matrix for given threshold value"
+    """
+    Plot confusion matrix for given threshold value.
     
+    Parameters:
+        y_true (list of int): True labels.
+        y_pred (list of int or float): Predicted labels or probabilities.
+        prob (bool): True if y_pred is probabilities.
+        threshold (float): Threshold value for predicted probabilities. Need for convertion of probabilities to labels.
+        title (str): Title of confusion matrix.
+        figsize (tuple of int): Size of plot.
+        
+    Returns:
+        None.
+        
+    Note:
+        Function make a plot with confusion matrix.
+    """
+
     import itertools
     from sklearn.metrics import confusion_matrix
     import matplotlib.pyplot as plt
