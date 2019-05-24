@@ -1,16 +1,26 @@
+# ---------------------------------------------------------------------------------------------------------------------I
 
 # ==============================================
 #    Frequently used functions by Frolov A.S.
 # ==============================================
 
-def get_data_from_hadoop(q, username='andrey.frolov'):
-    "Get data from Hadoop cluster to local Python notebook"
+def get_data_from_hadoop(q, username, host, port):
+    """Get data from Hadoop cluster to local Python notebook.
+    
+    Parameters:
+        q (str): SQL query.
+        username (str): username.
+    
+    Returns:
+        Pandas DataFrame with results of query.
+    """
     
     import puretransport
     from pyhive import hive
     import pandas as pd
     
-    transport = puretransport.transport_factory(host='t2ru-bda-mnp-001.corp.tele2.ru', port='10000', username=username, password=username)
+    transport = puretransport.transport_factory(host=host, port=port, username=username, password=username)
+    
     hive_con = hive.connect(thrift_transport=transport)
     cursor = hive_con.cursor()
     cursor.execute(q)
@@ -22,13 +32,26 @@ def get_data_from_hadoop(q, username='andrey.frolov'):
 
 
 def plot_feature_importance(model, feature_names, top=50):
-    "Plot feature importance for existing model"
+    """Plot feature importance for existing model.
     
+    Parameters:
+        model (model): sklearn or LightGBM model.
+        feature_names (list of str): List with names of features.
+        top (int): N of features, which will be shown on feature importances plot.
+    
+    Returns:
+        Plot with feature importances.
+    """
+
     import pandas as pd
     import matplotlib.pyplot as plt
     import seaborn as sns
     
-    importances = model.feature_importance() if 'lightgbm' in str(type(model)) else model.feature_importances_
+    if 'lightgbm' in str(type(model)):
+        importances = model.feature_importance()
+    else:
+        importances = model.feature_importances_
+        
     top = len(feature_names) if len(feature_names) < top else top
     imp = pd.Series(importances, index=feature_names).sort_values(ascending=False)
     plt.figure(figsize=(8, 0.25 * top))
@@ -37,19 +60,34 @@ def plot_feature_importance(model, feature_names, top=50):
     
     
 def plot_roc_curve(test, predict, labels, figsize=(10,8)):
-    "Plot ROC curve for predicted probabilities and calculate ROC-AUC"
+    """
+    Plot ROC curve for predicted probabilities and calculate ROC-AUC.
+    
+    Parameters:
+        test (list of int or float): List with target values.
+        predict (list of float): List with predicted probabilities.
+        labels (list of str): Labels for curves.
+        figsize (tuple of int): Size of plot.
+        
+    Returns:
+        Plot with ROC curves and ROC-AUC scores.
+    
+    """
     
     import numpy as np
     import matplotlib.pyplot as plt
     from sklearn.metrics import roc_curve, auc
     
-    if (str(type(test)) != "<class 'list'>") | (str(type(predict)) != "<class 'list'>") | (str(type(labels)) != "<class 'list'>"):
+    if (str(type(test)) != "<class 'list'>") | \
+       (str(type(predict)) != "<class 'list'>") | \
+       (str(type(labels)) != "<class 'list'>"):
         return 'Error: test, predict or labels is not a list'
     elif (len(test) != len(predict)) & (len(test) != len(labels)):
         return 'Error: lenghs of test, predict and labels mismatch'
     else:
         plt.figure(figsize=figsize)
         plt.title("ROC curve", fontsize=12)
+        
         for i in range(len(test)):
             fpr, tpr, _ = roc_curve(test[i], predict[i])
             roc_auc = auc(fpr, tpr)
@@ -62,12 +100,15 @@ def plot_roc_curve(test, predict, labels, figsize=(10,8)):
         plt.show()
         
         
-def calculate_feature_importance(data, target, fillna=True, fill_val=-1, test_size=0.20, stratify_by_target=True, shuffle=True, random_state=1,
-                                 features=None, n_estimators=500, min_samples_leaf=5, max_features = 0.2, n_jobs=3, max_depth=10, oob_score=True,
-                                 n_samples=-1, plot=True, top=30, save_to_file=True, filename='importances.csv', sep=';', decimal=',', 
-                                 encoding='cp1251'):
-    "Calculate permutation importance for given dataset"
-    
+def calculate_feature_importance(
+    data, target, fillna=True, fill_val=-1, test_size=0.20, stratify_by_target=True, shuffle=True, random_state=1,
+    features=None, n_estimators=500, min_samples_leaf=5, max_features = 0.2, n_jobs=3, max_depth=10, oob_score=True,
+    n_samples=-1, plot=True, top=30, save_to_file=True, filename='importances.csv', sep=';', decimal=',', 
+    encoding='cp1251'):
+    """
+    Calculate permutation importance for given dataset
+    """
+
     import pandas as pd
     from sklearn.model_selection import train_test_split
     from sklearn.ensemble import RandomForestClassifier
@@ -149,7 +190,9 @@ def plot_confusion_matrix(y_true, y_pred, prob=True, threshold=0.5, title='Confu
     print("AUC: {}%".format(round(roc_auc_score(y_true, y_pred) * 100, 1)))
     
     
-def plot_predicted_probability(data, label_col='label', pred_col='pred', frac=1.0, title='Predicted probabilities, distributed by label', figsize=(9,8)):
+def plot_predicted_probability(
+    data, label_col='label', pred_col='pred', frac=1.0, title='Predicted probabilities, distributed by label', 
+    figsize=(9,8)):
     "Plot distributions of predicted probability, divided by true label"
     
     import numpy as np
@@ -158,8 +201,10 @@ def plot_predicted_probability(data, label_col='label', pred_col='pred', frac=1.
     
     plt.figure(figsize=figsize)
     plt.title(title, fontsize=12)
-    sns.distplot(data[data[label_col] == 0][pred_col], kde=True, bins=np.linspace(0, 1, 51), label='{} = 0'.format(label_col))
-    sns.distplot(data[data[label_col] == 1][pred_col], kde=True, bins=np.linspace(0, 1, 51), label='{} = 1'.format(label_col))
+    sns.distplot(data[data[label_col] == 0][pred_col], kde=True, bins=np.linspace(0, 1, 51), 
+                 label='{} = 0'.format(label_col))
+    sns.distplot(data[data[label_col] == 1][pred_col], kde=True, bins=np.linspace(0, 1, 51), 
+                 label='{} = 1'.format(label_col))
     plt.xlabel('Probability', fontsize=12)
     plt.legend()
     plt.show()
