@@ -1,8 +1,8 @@
 # ---------------------------------------------------------------------------------------------------------------------I
 
-# ==============================================
-#    Frequently used functions by Frolov A.S.
-# ==============================================
+# ====================================================================
+#    Frequently used functions by Andrey Frolov (ODS.ai: @anfrolov)
+# ====================================================================
 
 def get_data_from_hadoop(q, username, host, port):
     """Get data from Hadoop cluster to local Python notebook.
@@ -43,7 +43,7 @@ def plot_feature_importance(model, feature_names, top=50):
         None.
         
     Note:
-        Function make a plot with feature importances.
+        Function makes a plot.
     """
 
     import pandas as pd
@@ -67,7 +67,7 @@ def plot_roc_curve(test, predict, labels, figsize=(10,8)):
     Plot ROC curve for predicted probabilities and calculate ROC-AUC.
     
     Parameters:
-        test (list of int or float): List with target values.
+        test (list of int): List with target values.
         predict (list of float): List with predicted probabilities.
         labels (list of str): Labels for curves.
         figsize (tuple of int): Size of plot.
@@ -76,7 +76,7 @@ def plot_roc_curve(test, predict, labels, figsize=(10,8)):
         None.
         
     Note:
-        Function make a plot with ROC curves and ROC-AUC scores.
+        Function makes a plot.
     """
     
     import numpy as np
@@ -143,7 +143,7 @@ def calculate_feature_importance(
         importance (pandas DataFrame): DataFrame with feature importances.
     
     Note:
-        If plot is True, function make a plot with feature importances.
+        If plot is True, function makes a plot with feature importances.
     """
 
     import pandas as pd
@@ -205,7 +205,7 @@ def plot_confusion_matrix(y_true, y_pred, prob=True, threshold=0.5, title='Confu
         None.
         
     Note:
-        Function make a plot with confusion matrix.
+        Function makes a plot.
     """
 
     import itertools
@@ -246,8 +246,23 @@ def plot_confusion_matrix(y_true, y_pred, prob=True, threshold=0.5, title='Confu
 def plot_predicted_probability(
     data, label_col='label', pred_col='pred', frac=1.0, title='Predicted probabilities, distributed by label', 
     figsize=(9,8)):
-    "Plot distributions of predicted probability, divided by true label"
-    
+	"""Plot distributions of predicted probabilities, divided by true labels.
+	
+	Parameters:
+		data (pandas DataFrame): Pandas DataFrame with true labels and predicted probabilities.
+		label_col (str): Column name with true labels.
+		pred_col (str): Column name with predicted probabilities.
+		frac (float): Fraction of data, which will be used for plot (for large datasets).
+		title (str): Title of plot.
+		figsize (tuple of int): Size of plot.
+		
+	Returns:
+        None.
+        
+    Note:
+        Function makes a plot.
+	"""
+
     import numpy as np
     import matplotlib.pyplot as plt
     import seaborn as sns
@@ -264,7 +279,19 @@ def plot_predicted_probability(
     
     
 def plot_precision_recall_curve(test, predict, figsize=(10,8)):
-    "Plot Precision-Recall curve for predicted probabilities"
+    """Plot Precision-Recall curve for predicted probabilities.
+	
+	Parameters:
+		test (list of int): True labels.
+		predict (list of float): Predicted probabilities.
+		figsize (tuple of int): Size of plot.
+		
+	Returns:
+        None.
+        
+    Note:
+        Function makes a plot.
+	"""
     
     from sklearn.metrics import average_precision_score, precision_recall_curve
     import matplotlib.pyplot as plt
