@@ -246,22 +246,22 @@ def plot_confusion_matrix(y_true, y_pred, prob=True, threshold=0.5, title='Confu
 def plot_predicted_probability(
     data, label_col='label', pred_col='pred', frac=1.0, title='Predicted probabilities, distributed by label', 
     figsize=(9,8)):
-	"""Plot distributions of predicted probabilities, divided by true labels.
-	
-	Parameters:
-		data (pandas DataFrame): Pandas DataFrame with true labels and predicted probabilities.
-		label_col (str): Column name with true labels.
-		pred_col (str): Column name with predicted probabilities.
-		frac (float): Fraction of data, which will be used for plot (for large datasets).
-		title (str): Title of plot.
-		figsize (tuple of int): Size of plot.
-		
-	Returns:
+    """Plot distributions of predicted probabilities, divided by true labels.
+    
+    Parameters:
+        data (pandas DataFrame): Pandas DataFrame with true labels and predicted probabilities.
+        label_col (str): Column name with true labels.
+        pred_col (str): Column name with predicted probabilities.
+        frac (float): Fraction of data, which will be used for plot (for large datasets).
+        title (str): Title of plot.
+        figsize (tuple of int): Size of plot.
+        
+    Returns:
         None.
         
     Note:
         Function makes a plot.
-	"""
+    """
 
     import numpy as np
     import matplotlib.pyplot as plt
@@ -280,18 +280,18 @@ def plot_predicted_probability(
     
 def plot_precision_recall_curve(test, predict, figsize=(10,8)):
     """Plot Precision-Recall curve for predicted probabilities.
-	
-	Parameters:
-		test (list of int): True labels.
-		predict (list of float): Predicted probabilities.
-		figsize (tuple of int): Size of plot.
-		
-	Returns:
+    
+    Parameters:
+        test (list of int): True labels.
+        predict (list of float): Predicted probabilities.
+        figsize (tuple of int): Size of plot.
+        
+    Returns:
         None.
         
     Note:
         Function makes a plot.
-	"""
+    """
     
     from sklearn.metrics import average_precision_score, precision_recall_curve
     import matplotlib.pyplot as plt
