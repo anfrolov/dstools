@@ -245,7 +245,7 @@ def plot_confusion_matrix(y_true, y_pred, prob=True, threshold=0.5, title='Confu
     
 def plot_predicted_probability(
     data, label_col='label', pred_col='pred', frac=1.0, title='Predicted probabilities, distributed by label', 
-    figsize=(9,8)):
+    figsize=(9,8), kde=True):
     """Plot distributions of predicted probabilities, divided by true labels.
     
     Parameters:
@@ -269,9 +269,9 @@ def plot_predicted_probability(
     
     plt.figure(figsize=figsize)
     plt.title(title, fontsize=12)
-    sns.distplot(data[data[label_col] == 0][pred_col], kde=True, bins=np.linspace(0, 1, 51), 
+    sns.distplot(data[data[label_col] == 0][pred_col], kde=kde, bins=np.linspace(0, 1, 51), 
                  label='{} = 0'.format(label_col))
-    sns.distplot(data[data[label_col] == 1][pred_col], kde=True, bins=np.linspace(0, 1, 51), 
+    sns.distplot(data[data[label_col] == 1][pred_col], kde=kde, bins=np.linspace(0, 1, 51), 
                  label='{} = 1'.format(label_col))
     plt.xlabel('Probability', fontsize=12)
     plt.legend()
