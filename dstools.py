@@ -1,8 +1,5 @@
-# ---------------------------------------------------------------------------------------------------------------------I
 
-# ====================================================================
-#    Frequently used functions by Andrey Frolov (ODS.ai: @anfrolov)
-# ====================================================================
+# Frequently used functions
 
 def get_data_from_hadoop(q, username, host, port):
     """Get data from Hadoop cluster to local Python notebook.
