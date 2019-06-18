@@ -148,7 +148,7 @@ def calculate_feature_importance(
     data, target, fillna=True, fill_val=-1, test_size=0.20, stratify_by_target=True, shuffle=True, random_state=1,
     features=None, n_estimators=500, min_samples_leaf=5, max_features = 0.2, n_jobs=3, max_depth=10, oob_score=True,
     n_samples=-1, plot=True, top=30, save_to_file=True, filename='importances.csv', sep=';', decimal=',', 
-    encoding='cp1251'):
+    encoding='cp1251', permutation=True):
     """
     Calculate permutation importance for given dataset.
     
@@ -176,6 +176,7 @@ def calculate_feature_importance(
         sep (str): Set separator for file with feature importances.
         decimal (str): Set decimal delimiter for file with feature importances.
         encoding (str): Set encoding for file with feature importances.
+        permutation (bool): If True - permutation importance will be used, otherwise - standard feature importance.
     
     Returns:
         model (sklearn model): sklearn RandomForestClassifier, used for calculation of feature importances.
@@ -214,7 +215,11 @@ def calculate_feature_importance(
                                    oob_score=oob_score, 
                                    random_state=random_state)
     model.fit(X_train, y_train)
-    importance = importances(model, X_test, y_test, n_samples=n_samples)
+    
+    if permutation:
+        importance = importances(model, X_test, y_test, n_samples=n_samples)
+    else:
+        importance = pd.DataFrame({'Importance': model.feature_importances_, 'Feature': features}).sort_values(by='Importance', ascending=False).set_index('Feature')
     
     if save_to_file:
         importance.to_csv(filename, sep=sep, decimal=decimal, encoding=encoding)
