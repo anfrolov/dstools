@@ -283,8 +283,8 @@ def plot_confusion_matrix(y_true, y_pred, prob=True, threshold=0.5, title='Confu
     plt.show()
     
     if prob:
-		print('Threshold: {}'.format(threshold))
-	
+        print('Threshold: {}'.format(threshold))
+    
     print("Precision: {}%".format(round(precision_score(y_true, y_pred) * 100, 1)))
     print("Recall: {}%".format(round(recall_score(y_true, y_pred) * 100, 1)))
     print("AUC: {}%".format(round(roc_auc_score(y_true, y_pred) * 100, 1)))
