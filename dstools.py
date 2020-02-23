@@ -1,3 +1,73 @@
+#
+#    Tools for typical data science tasks
+#
+
+import sqlite3
+import numpy as np
+import pandas as pd
+import csv
+import re
+from tqdm import tqdm
+
+
+class DB:
+    def __init__(self, database):
+        self.database = database
+        
+    def load(self, filename, table, primary_key):
+        con = sqlite3.connect(self.database)
+        cur = con.cursor()
+        
+        df = pd.read_csv(filename, nrows=5)
+        dtypes = pd.Series(df.dtypes.astype(str).tolist(), index=df.columns.tolist())
+        type_map = {'object': 'text', 'int': 'integer', 'float': 'real'}
+        dtypes = dtypes.apply(lambda x: re.sub(r'[0-9]+', '', x))
+        dtypes = dtypes.map(type_map)
+        
+        query = "create table if not exists {} ({}, primary key ({}))".format(
+            table,
+            ", ".join([" ".join(i) for i in zip(dtypes.index, dtypes.values)]),
+            primary_key
+        )
+        cur.execute(query)
+
+        with open(filename, 'rt') as f:
+            next(f, None)
+            reader = csv.reader(f)
+            for line in tqdm(reader):
+                cur.execute("insert or replace into {} values ({});".format(table, ", ".join(list("?" * len(dtypes)))), line)
+
+        con.commit()
+        con.close()
+    
+    def execute(self, query, fetch=False):
+        con = sqlite3.connect(self.database)
+        cur = con.cursor()
+        cur.execute(query)
+        if fetch:
+            fetched_cols = [i[0] for i in cur.description]
+            df = pd.DataFrame(cur.fetchall(), columns=fetched_cols)
+        con.commit()
+        con.close()
+        return df if fetch else None
+
+
+class Validator:
+    def __init__(self, cv):
+        self.cv = cv
+
+    def train(self):
+        ...
+
+
+
+
+        
+
+
+
+
+
 
 #    Frequently used functions
 
