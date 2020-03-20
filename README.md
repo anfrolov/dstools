@@ -1,12 +1,15 @@
 # dstools
-Useful functions for my data science projects
+Пример ML проекта.
 
-## Current functionality
-
-* get_data_from_hadoop - Get data from Hadoop cluster to local Python notebook
-* plot_feature_importance - Plot feature importance for existing model
-* plot_roc_curve - Plot ROC curve for predicted probabilities and calculate ROC-AUC
-* calculate_feature_importance - Calculate permutation importance for given dataset
-* plot_confusion_matrix - Plot confusion matrix for given threshold value
-* plot_predicted_probability - Plot distributions of predicted probability, divided by true label
-* plot_precision_recall_curve - Plot Precision-Recall curve for predicted probabilities
+Структура:
+	src - Python код
+	|- dstools - основной модуль для построения моделей
+	config - конфигурационные файлы в формате TOML для dynaconf
+	|- settings.toml - публичные настройки проекта (файлы с данными, названия таблиц, признаков)
+	|- .secrets.toml - секретные настройки проекта (логины, пароли)
+	examples - примеры проекта
+	|- research.ipynb - зоздание модели
+	|- train.ipynb - переобучение модели
+	|- scoring.ipynb - скоринг данных
+	.gitignore - исключения для Git
+	README.md - описание
