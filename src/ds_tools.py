@@ -23,33 +23,86 @@ pd.set_option('display.max_columns', 500)
 
 
 class DataKeeper:
+    """Class with default features and functions for dumping, 
+    loading, merging, and converting feature sets.
+    """
     def __init__(self):
+        """Default feature set.
+        """
         self.feature_sets = []
         self.feature_sets.append({
-            'name': 'name_1',
-            'class': 'class_1',
-            'type': 'type_1',
-            'source': 'source_1',
+            'name': 'set1',
+            'class': 'main',
+            'type': 'numerical',
+            'source': 'features_set1',
             'features': [
-                'feature_1', 'feature_2'
+                'set1_feature_0', 'set1_feature_1', 'set1_feature_2', 'set1_feature_3', 'set1_feature_4'
             ]            
         })
-    
-    def dump_features(self, filename):
+        self.feature_sets.append({
+            'name': 'set2',
+            'class': 'extra',
+            'type': 'binary',
+            'source': 'features_set2',
+            'features': [
+                'set2_feature_0', 'set2_feature_1', 'set2_feature_2', 'set2_feature_3', 'set2_feature_4'
+            ]            
+        })
+        self.feature_sets.append({
+            'name': 'set3',
+            'class': 'extra',
+            'type': 'numerical',
+            'source': 'features_set3',
+            'features': [
+                'set3_feature_0', 'set3_feature_1', 'set3_feature_2', 'set3_feature_3', 'set3_feature_4',
+                'set3_feature_5', 'set3_feature_6', 'set3_feature_7', 'set3_feature_8'
+            ]            
+        })
+        self.feature_sets.append({
+            'name': 'set4',
+            'class': 'main',
+            'type': 'numerical',
+            'source': 'features_set4',
+            'features': [
+                'set4_feature_0', 'set4_feature_1', 'set4_feature_2', 'set4_feature_3', 'set4_feature_4',
+                'set4_feature_5', 'set4_feature_6', 'set4_feature_7', 'set4_feature_8', 'set4_feature_9'
+            ]            
+        })
+        self.feature_sets.append({
+            'name': 'set5',
+            'class': 'main',
+            'type': 'numerical',
+            'source': 'features_set5',
+            'features': [
+                'set5_feature_0', 'set5_feature_1', 'set5_feature_2', 'set5_feature_3', 'set5_feature_4',
+                'set5_feature_5', 'set5_feature_6', 'set5_feature_7', 'set5_feature_8', 'set5_feature_9'
+            ]            
+        })
+        
+    def dump_features(self, filename='features.json'):
+        """Dump features to JSON file.
+        
+        Parameters:
+            filename (str): filename
+        """
         with open(filename, 'w') as f:
             json.dump(self.feature_sets, f)
             
-    def load_features(self, filename):
+    def load_features(self, filename='features.json'):
+        """Load features from JSON file.
+        
+        Parameters:
+            filename (str): filename
+        """
         with open(filename, 'r') as f:
             self.feature_sets = json.load(f)
             
-    def merge_features(self, input_files, output_file='merged_features.json', silent=False):
-        """Merge several json files with feature sets.
+    def merge_features(self, input_files, output_file='merged_features.json'):
+        """Merge several JSON files with feature sets.
         
         Parameters:
-            input_files (list of str): list of json files to be merged
+            input_files (list of str): list of JSON files to be merged
             output_file (str): name of merged file
-            silent (bool): don't output any information
         """
         
         all_features = []
@@ -73,16 +126,13 @@ class DataKeeper:
                 })
         with open(output_file, 'w') as f:
             json.dump(merged_json, f)
-        if not silent:
-            print('Files successfully merded to file {}'.format(output_file))
         
-    def convert_features(self, features, filename, silent=False):
-        """Convert list of features to json file.
+    def convert_features(self, features, filename):
+        """Convert list of features to JSON file.
         
         Parameters:
             features (list of str): list of features
-            filename (str): json filename
-            silent (bool): don't output any information
+            filename (str): JSON filename
         """
         json_file = []
         for subset in self.feature_sets:
@@ -97,129 +147,79 @@ class DataKeeper:
                 })
         with open(filename, 'w') as f:
             json.dump(json_file, f)
-        if not silent:
-            print('Features converted to file {}'.format(filename))
-        
 
-class General(DataKeeper):
-    def __init__(self):
+
+class Loader(DataKeeper):
+    def __init__(self, db):
         super().__init__()
-    
-    def read_teradata(self, query, dsn='dsn', silent=True):
-        """Execute SQL query and load results from Teradata.
+        self.db = db
+        
+    def load(self, source=None, target_column=None, id_column = 'client_id', feature_source=None,
+             feature_sets='all', except_sets=None, except_features=None, silent=False):
+        """Load data.
         
         Parameters:
-            query (str): SQL query
-            dsn (str): name of ODBC connection
+            target_source (str): table name with target
+            target_column (str): column name with target
+            feature_source (str): path to file with feature names
+            feature_sets (str or list of str): 
+                'all' - load all features, 
+                'main' - load only main features, 
+                if list - names of feature sets for loading, available names: 
+                        'set1', 'set2', 'set3', 'set4', 'set5'
+            except_sets (None or str or list of str): if not None, this feature set(s) won't be loaded
+            except_features (None or str or list of str): if not None, this feature(s) won't be loaded
             silent (bool): don't output any information
             
         Returns:
-            df (pandas.DataFrame): query results
+            pandas.DataFrame with loaded data
         """
-        con = connect(dsn=dsn, turbodbc_options=make_options(prefer_unicode=True, autocommit=True))
-        cursor = con.cursor()
-        cursor.execute(query)
-        df = pd.DataFrame(cursor.fetchallnumpy())
-        df.columns = df.columns.str.lower()
-        con.close()
-        if not silent:
-            print('Data loaded, shape: {}'.format(df.shape))
-        df = self.reduce_mem_usage(df, silent=silent)
-        return df
-
-    def read_hadoop(self, query, username, host='1.2.3.4', port='1234', silent=True):
-        """Execute SQL query and load results from Hadoop.
         
-        Parameters:
-            query (str): SQL query
-            username (str): username
-            host (str): host
-            port (str): port
-            silent (bool): don't output any information
+        self.source = source
+        self.target_column = target_column
+        self.id_column = id_column
+        
+        if feature_source:
+            self.load_features(feature_source)
+        
+        if feature_sets == 'all':
+            subsets = [i['name'] for i in self.feature_sets]
+        elif feature_sets == 'main':
+            subsets = [i['name'] for i in self.feature_sets if i['class'] == 'main']
+        else:
+            subsets = feature_sets
+        
+        if except_sets:
+            subsets = [i for i in subsets if i not in except_sets]
+        
+        if target_column:
+            query_load_ids = f"select {self.id_column}, {self.target_column} from {self.target_source}"
+        else:
+            query_load_ids = f"select {self.id_column} from {self.target_source}"
             
-        Returns:
-            df (pandas.DataFrame): query results
-        """
-        transport = puretransport.transport_factory(host=host, port=port, username=username, password=username)
-        hive_con = hive.connect(thrift_transport=transport)
-        cursor = hive_con.cursor()
-        cursor.execute(query)
-        df = pd.DataFrame(cursor.fetchall(), columns = [x[0] for x in cursor.description])
-        df.columns = [i[i.rfind('.')+1:] for i in df.columns.tolist()]
-        hive_con.close()
+        df = self.reduce_mem_usage(self.db.read(query_load_ids))
+            
         if not silent:
-            print('Data loaded, shape: {}'.format(df.shape))
-        df = self.reduce_mem_usage(df, silent=silent)
-        return df
-    
-    def write_teradata(self, df, login, password, teradata_ip='1.2.3.4', database='db', 
-                       table_name='table', fastload_path='path', 
-                       temp_folder='temp', silent=True):
-        """Export data to Teradata table.
+            print(f'IDs loaded, {df.shape[0]} rows')
         
-        Parameters:
-            df (pandas.DataFrame): DataFrame with data for export
-            login (str): Teradata login
-            password (str): Teradata password
-            teradata_ip (str): Teradata ip
-            database (str): database name, which will be used for saving data
-            table_name (str): table name - this table will be created in specified database
-            fastload_path (str): path to Teradata fastload utility
-            temp_folder (str): folder name for temporary files (will be deleted)
-            silent (bool): don't output any information
-        """
-        df = self.reduce_mem_usage(df, silent=silent)
-        con = connect(dsn='dsn', turbodbc_options=make_options(prefer_unicode=True, autocommit=True))
-        cursor = con.cursor()
-        try:
-            drop_sql = 'drop table {}.{}'.format(database, table_name)
-            cursor.execute(drop_sql)
-        except turbodbc.DatabaseError:
-            pass
-        teradata_types = {
-            'int8': 'byteint', 'int16': 'smallint', 'int32': 'integer', 'int64': 'bigint',
-            'float16': 'float', 'float32': 'float', 'float64': 'double', 'object': 'varchar',
-            'bool': 'byteint'
-        }
-        query = 'create multiset table {}.{} ('.format(database, table_name)
-        for idx, dtype in zip(df.dtypes.index, df.dtypes.values):
-            dtype = str(dtype)
-            td_type = teradata_types[dtype] + ('' if dtype != 'object' else '({})'.format(df[idx].str.len().max()))
-            query += '{} {}, '.format(idx, td_type)
-        query = query[:-2] + ') no primary index'
-        cursor.execute(query)
-        con.close()
-        if not os.path.exists(temp_folder):
-            os.makedirs(temp_folder)
-        df.to_csv('{}/df.csv'.format(temp_folder), sep=',', decimal='.', index=False)
-        script = \
-        'set session charset "UTF8";\n' + \
-        'logon {}/{}, {};\n'.format(teradata_ip, login, password) + \
-            'database {};\n'.format(database) + \
-            'begin loading {}\n'.format(table_name) + \
-            'errorfiles err1, err2\n' + \
-            'checkpoint 1000000;\n' + \
-            'set record vartext "," nostop;\n' + \
-            'record 2;\n' + \
-            'define\n' + \
-        ',\n'.join(['{} (varchar({}))'.format(col, df[col].astype(str).str.len().max()) for col in df.columns]) + '\n' + \
-        'file = {};\n'.format(os.getcwd() + '\\{}\\df.csv'.format(temp_folder)) + \
-        'insert into {}\n'.format(table_name) + \
-        'values(\n' + \
-        ',\n'.join([':' + col for col in df.columns]) + \
-        ');\n' + \
-        'end loading;\n' + \
-        'logoff;\n' + \
-        'quit;'
-        script_file = open('{}/fastload_script.txt'.format(temp_folder), "w+")
-        script_file.write(script)
-        script_file.close()
-        command = 'cd {} | fastload.exe < {}\\{}\\fastload_script.txt'.format(fastload_path, os.getcwd(), temp_folder)
-        flg = os.system(command)
-        if not silent and flg == 0:
-            print('Data uploaded successfully')
-        shutil.rmtree(temp_folder)
-    
+        for i in [j for j in self.feature_sets if j['name'] in subsets]:
+            
+            features = i['features']
+            if except_features:
+                features = [i for i in features if i not in except_features]
+                        
+            add_query = f"select {self.id_column}, " + ", ".join(features) + \
+                        f" from {self.source} as t join {i['source']} as d on " + \
+                        f"d.{self.id_column} = t.{self.id_column}"
+                             
+            add_df = self.reduce_mem_usage(self.db.read(add_query))
+            df = df.merge(add_df, on='id', how='left')
+            
+            if not silent:
+                print(f"Loaded {len(features)} features from {i['name']}")
+            
+        return df
+        
     def reduce_mem_usage(self, df, silent=True):
         """Reduce memory usage via conversion of data types.
         
@@ -255,88 +255,10 @@ class General(DataKeeper):
                         df[col] = df[col].astype(np.float64)    
         end_mem = df.memory_usage().sum() / 1024**2
         if not silent: 
-            print('Mem. usage decreased to {:5.2f} Mb ({:.1f}% reduction)'.format(end_mem, 100 * (start_mem - end_mem) / start_mem))
-        return df
-    
-    
-class Loader(General):
-    def __init__(self):
-        super().__init__()
-        
-    def load(self, report_date, target_source=None, target_column='label', feature_source=None,
-             teradata_dsn='dsn', feature_sets='all', except_sets=None, except_features=None, 
-             last_flash_threshold=3, lifetime_threshold=30, silent=False):
-        """Load data.
-        
-        Parameters:
-            report_date (str): report date, format: '2019-01-01'
-            target_source (str): table name with target
-            target_column (str): column name with target
-            feature_source (str): path to file with feature names
-            teradata_dsn (str): name of ODBC connection
-            feature_sets (str or list of str): 
-                'all' - load all features, 
-                'dmsc' - load only dmsc features, 
-                if list - names of feature sets for loading, available names: 
-                        'set1', 'set2', 'set3'
-            except_sets (None or str or list of str): if not None, this feature set(s) won't be loaded
-            except_features (None or str or list of str): if not None, this feature(s) won't be loaded
-            silent (bool): don't output any information
-            
-        Returns:
-            df (pandas DataFrame): pandas DataFrame
-        """
-        
-        self.target_source = target_source
-        self.target_column = target_column
-        self.teradata_dsn = teradata_dsn
-        
-        if feature_source:
-            self.load_features(feature_source)
-        
-        if feature_sets == 'all':
-            subsets = [i['name'] for i in self.feature_sets]
-        elif feature_sets == 'set1':
-            subsets = [i['name'] for i in self.feature_sets if i['class'] == 'set1']
-        else:
-            subsets = feature_sets
-        
-        if except_sets:
-            subsets = [i for i in subsets if i not in except_sets]
-        
-        if target_source:
-            query_load_ids = "sel id, {} from {} where dt = date'{}'"\
-                             .format(self.target_column, self.target_source, report_date)
-        else:
-            query_load_ids = "sel id from table where dt = date'{}' ".format(report_date)
-            
-        df = self.read_teradata(query_load_ids)
-            
-        if not silent:
-            print('IDs loaded, {} rows'.format(df.shape[0]))
-        
-        for i in [j for j in self.feature_sets if j['name'] in subsets]:
-            
-            features = i['features']
-            if except_features:
-                features = [i for i in features if i not in except_features]
-            
-            if target_source:
-                add_query = "sel t.id, " + ", ".join(features) + \
-                            " from {} as t join {} as d on d.id = t.id and d.dt = t.dt and t.dt = date'{}' and d.dt = date'{}'"\
-                            .format(self.target_source, i['source'], report_date, report_date)
-            else:
-                add_query = "sel t.id, " + ", ".join(['d.' + i for i in features]) + \
-                            " from table as t join {} as d on d.id = t.id and t.dt = date'{}' and d.dt = date'{}' "\
-                            .format(i['source'], report_date, report_date)
-                 
-            add_df = self.read_teradata(add_query)
-            df = df.merge(add_df, on='id', how='left')
-            
-            if not silent:
-                print('{} {} features loaded'.format(len(features), i['name']))
-            
-        return df
+            print('Mem. usage decreased to {:5.2f} Mb ({:.1f}% reduction)'.format(
+                end_mem, 100 * (start_mem - end_mem) / start_mem
+            ))
+        return df   
     
     
 class FeatureSelector(General):
