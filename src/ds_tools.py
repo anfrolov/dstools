@@ -11,15 +11,140 @@ import numpy as np
 import pandas as pd
 from sklearn.model_selection import StratifiedKFold, train_test_split
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.metrics import roc_auc_score
-from rfpimp import importances
+from sklearn.metrics import roc_auc_score, roc_curve, auc, confusion_matrix, precision_score, recall_score
+from bayes_opt import BayesianOptimization
+import rfpimp
 import matplotlib.pyplot as plt
 import seaborn as sns
 import json
 import lightgbm as lgb
 import joblib
+import itertools
 warnings.filterwarnings('ignore')
 pd.set_option('display.max_columns', 500)
+
+
+def plot_roc_curve(sets, figsize=(10,8)):
+    """Plot ROC curves and calculate ROC-AUC.
+    
+    Parameters:
+        sets (list of tuples): tuples with true labels, predicted probabilities and labels.
+            tuple=(y_true, y_pred, label), where:
+                y_true (list or pandas.Series of int): true labels
+                y_pred (list or pandas.Series of float): predicted probabilities
+                label (str): label for legend
+        figsize (tuple of int): figure size
+    """
+    
+    plt.figure(figsize=figsize)
+    plt.title("ROC curves", fontsize=12)
+    
+    for i in sets:
+        fpr, tpr, _ = roc_curve(i[0], i[1])
+        roc_auc = auc(fpr, tpr)
+        plt.plot(fpr, tpr, label=f'AUC={np.round(roc_auc, 4)}, {i[2]}')
+
+    plt.plot([0, 1], [0, 1], color='black', linestyle='--')
+    plt.legend()
+    plt.xlabel('False positive rate', fontsize=12)
+    plt.ylabel('True positive rate', fontsize=12)
+    plt.show()
+
+
+def plot_confusion_matrix(y_true, y_pred, prob=True, threshold=0.5, title='Confusion matrix', figsize=(6, 5)):
+    """
+    Plot confusion matrix for given threshold value.
+    
+    Parameters:
+        y_true (list of int): true labels
+        y_pred (list of int or float): predicted labels or probabilities
+        prob (bool): True if y_pred is probabilities
+        threshold (float): threshold value for predicted probabilities
+        title (str): title of confusion matrix
+        figsize (tuple of int): figure size
+    """
+
+    if prob:
+        y_pred = (y_pred > threshold).astype(int)
+    
+    cm = confusion_matrix(y_true, y_pred)
+    
+    plt.figure(figsize=figsize)
+    plt.imshow(cm, interpolation='nearest', cmap=plt.cm.Blues)
+    plt.title(title, color='black', fontsize=12)
+    plt.xticks([0, 1], ['0', '1'], color='black', fontsize=12)
+    plt.yticks([0, 1], ['0', '1'], color='black', fontsize=12)
+    plt.colorbar()
+ 
+    thresh = cm.max() / 2.
+    for i, j in itertools.product(range(cm.shape[0]), range(cm.shape[1])):
+        plt.text(j, i, format(cm[i, j], 'd'),
+                 horizontalalignment="center",
+                 color="white" if cm[i, j] > thresh else "black", fontsize=12)
+ 
+    plt.tight_layout()
+    plt.ylabel('True', color='black', fontsize=12)
+    plt.xlabel('Predict', color='black', fontsize=12)
+    plt.show()
+    
+    if prob:
+        print('Threshold: {}'.format(threshold))
+    
+    print("Precision: {}%".format(round(precision_score(y_true, y_pred) * 100, 1)))
+    print("Recall: {}%".format(round(recall_score(y_true, y_pred) * 100, 1)))
+    print("AUC: {}%".format(round(roc_auc_score(y_true, y_pred) * 100, 1)))
+    
+    
+def plot_predicted_probability(y_true, y_pred, title='Predicted probabilities, distributed by label', 
+                               figsize=(9,8), kde=True):
+    """Plot distributions of predicted probabilities, divided by true labels.
+    
+    Parameters:
+        y_true (list of int): true labels
+        y_pred (list of float): predicted probabilities
+        title (str): figure title
+        figsize (tuple of int): figure size
+        kde (bool): show kernel density estimation
+    """
+    
+    plt.figure(figsize=figsize)
+    plt.title(title, fontsize=12)
+    sns.distplot(y_pred[y_true == 0], kde=kde, bins=np.linspace(0, 1, 51), label="target = 0")
+    sns.distplot(y_pred[y_true == 1], kde=kde, bins=np.linspace(0, 1, 51), label="target = 1")
+    plt.xlabel('Probability', fontsize=12)
+    plt.legend()
+    plt.show()
+    
+    
+def plot_precision_recall_curve(test, predict, figsize=(10,8)):
+    """Plot Precision-Recall curve for predicted probabilities.
+    
+    Parameters:
+        test (list of int): True labels.
+        predict (list of float): Predicted probabilities.
+        figsize (tuple of int): Size of plot.
+        
+    Returns:
+        None.
+        
+    Note:
+        Function makes a plot.
+    """
+    
+    from sklearn.metrics import average_precision_score, precision_recall_curve
+    import matplotlib.pyplot as plt
+    
+    average_precision = average_precision_score(test, predict)
+    precision, recall, _ = precision_recall_curve(test, predict, pos_label=1)
+    plt.figure(figsize=figsize)
+    plt.step(recall, precision, color='b', alpha=0.2, where='post')
+    plt.fill_between(recall, precision, step='post', alpha=0.2, color='b')
+    plt.xlabel('Recall', fontsize=12)
+    plt.ylabel('Precision', fontsize=12)
+    plt.ylim([0.0, 1.0])
+    plt.xlim([0.0, 1.0])
+    plt.title('2-class Precision-Recall curve: AP={0:0.2f}'.format(average_precision), fontsize=12)
+    plt.show()
 
 
 class DataKeeper:
@@ -151,6 +276,11 @@ class DataKeeper:
 
 class Loader(DataKeeper):
     def __init__(self, db):
+        """Loader initialization.
+        
+        Parameters:
+            db (db_tools): DB class from db_tools
+        """
         super().__init__()
         self.db = db
         
@@ -159,8 +289,9 @@ class Loader(DataKeeper):
         """Load data.
         
         Parameters:
-            target_source (str): table name with target
+            source (str): table name with target
             target_column (str): column name with target
+            id_column (str): column name with id
             feature_source (str): path to file with feature names
             feature_sets (str or list of str): 
                 'all' - load all features, 
@@ -193,9 +324,9 @@ class Loader(DataKeeper):
             subsets = [i for i in subsets if i not in except_sets]
         
         if target_column:
-            query_load_ids = f"select {self.id_column}, {self.target_column} from {self.target_source}"
+            query_load_ids = f"select {self.id_column}, {self.target_column} from {self.source}"
         else:
-            query_load_ids = f"select {self.id_column} from {self.target_source}"
+            query_load_ids = f"select {self.id_column} from {self.source}"
             
         df = self.reduce_mem_usage(self.db.read(query_load_ids))
             
@@ -208,12 +339,12 @@ class Loader(DataKeeper):
             if except_features:
                 features = [i for i in features if i not in except_features]
                         
-            add_query = f"select {self.id_column}, " + ", ".join(features) + \
+            add_query = f"select t.{self.id_column}, " + ", ".join(features) + \
                         f" from {self.source} as t join {i['source']} as d on " + \
                         f"d.{self.id_column} = t.{self.id_column}"
                              
             add_df = self.reduce_mem_usage(self.db.read(add_query))
-            df = df.merge(add_df, on='id', how='left')
+            df = df.merge(add_df, on=self.id_column, how='left')
             
             if not silent:
                 print(f"Loaded {len(features)} features from {i['name']}")
@@ -261,39 +392,48 @@ class Loader(DataKeeper):
         return df   
     
     
-class FeatureSelector(General):
-    def __init__(self):
-        super().__init__()
+class FeatureSelector(DataKeeper):
+    def __init__(self, db):
+        """Feature selector initialization.
         
-    def load_data(self, report_date, target_source, target_column='label', feature_source=None,
-                  teradata_dsn='dsn', feature_sets='all', except_sets=None, except_features=None, 
-                  silent=False):
+        Parameters:
+            db (db_tools): DB class from db_tools
+        """
+        super().__init__()
+        self.db = db
+        
+    def load_data(self, source, target_column='target', id_column = 'client_id',
+                  feature_source=None, feature_sets='all', except_sets=None, 
+                  except_features=None, silent=False):
         """Load data for feature selection.
         
         Parameters:
-            report_date (str): report date, format: '2019-01-01'
-            target_source (str): table name with target
+            source (str): table name with target
             target_column (str): column name with target
+            id_column (str): column name with id
             feature_source (str): path to file with feature names
-            teradata_dsn (str): name of ODBC connection
             feature_sets (str or list of str): 
                 'all' - load all features, 
-                'set1' - load only set1 features, 
+                'main' - load only main features, 
                 if list - names of feature sets for loading, available names: 
-                        'set1', 'set2', 'set3'
+                        'set1', 'set2', 'set3', 'set4', 'set5'
             except_sets (None or str or list of str): if not None, this feature set(s) won't be loaded
             except_features (None or str or list of str): if not None, this feature(s) won't be loaded
             silent (bool): don't output any information
         """
         self.target_column = target_column
+        self.id_column = id_column
         self.useless = {}
         
-        loader = Loader()
-        self.data = loader.load(report_date=report_date, target_source=target_source, target_column=target_column, 
-                                feature_source=feature_source, teradata_dsn=teradata_dsn, feature_sets=feature_sets, 
-                                except_sets=except_sets, except_features=except_features, silent=silent)
+        if not silent:
+            print("Loading data ...")
         
-        self.features = [col for col in self.data.columns if col not in ['id', self.target_column]]
+        loader = Loader(self.db)
+        self.data = loader.load(source=source, target_column=target_column, id_column=id_column,
+                                feature_source=feature_source, feature_sets=feature_sets, 
+                                except_sets=except_sets, except_features=except_features, silent=silent)
+              
+        self.features = [col for col in self.data.columns if col not in [self.id_column, self.target_column]]
         
         if not silent:
             print('All data loaded successfully, shape: {}'.format(self.data.shape))
@@ -355,11 +495,11 @@ class FeatureSelector(General):
         """
         all_useless = []
         for k in self.useless:
-            self.data.drop([i for i in self.useless[k] if i in self.data.columns], axis=1, inplace=True)
+            self.data.drop([col for col in self.useless[k] if col in self.data.columns], axis=1, inplace=True)
             all_useless += self.useless[k]
-        self.features = [i for i in self.data.columns.tolist() if i not in ['subs_id', self.target_column]]
+        self.features = [col for col in self.data.columns if col not in [self.id_column, self.target_column]]
         if not silent:
-            print('Deleted {} useless features, shape of data: {}'.format(len(list(set(all_useless))), self.data.shape))
+            print('Deleted {} useless features, shape: {}'.format(len(list(set(all_useless))), self.data.shape))
             
     def fillna(self, value=-1, silent=False):
         """Fill NA values in data.
@@ -379,7 +519,7 @@ class FeatureSelector(General):
         Parameters:
             silent (bool): don't output any information
         """
-        if np.sum(self.data.dtypes == 'object') > 0:
+        if np.sum(self.data[self.features].dtypes == 'object') > 0:
             self.cat_dict = {}
             for var in self.data.dtypes[self.data.dtypes == 'object'].index.tolist():
                 self.data[var] = self.data[var].astype('category')
@@ -388,35 +528,48 @@ class FeatureSelector(General):
             if not silent:
                 print('Categorical features encoded')
     
-    def calculate_feature_importances(self, permutation=False, silent=False):
+    def calculate_feature_importances(self, test_size=0.2, n_estimators=500, min_samples_leaf=5, 
+                                      max_features=0.2, n_jobs=-1, oob_score=True, random_state=1,
+                                      permutation=True, silent=False):
         """Calculate feature importance.
         
         Parameters:
+            test_size (float): test data size
+            n_estimators (int): n_estimators for RandomForestClassifier
+            min_samples_leaf (int): min_samples_leaf for RandomForestClassifier
+            max_features (float): max_features for RandomForestClassifier
+            n_jobs (int): n_jobs for RandomForestClassifier
+            oob_score (bool): oob_score for RandomForestClassifier
+            random_state (int): random_state
             permutation (bool): use permutation importance
             silent (bool): don't output any information
         """
+        
+        if not silent:
+            print(f"Calculating feature importances, permutation={permutation} ...")
+        
+        self.permutation = permutation
         self.fillna()
         self.encode_cats()
         train, test = train_test_split(self.data, 
-                                       test_size=0.2, 
+                                       test_size=test_size, 
                                        stratify=self.data[self.target_column], 
                                        shuffle=True, 
-                                       random_state=1)
+                                       random_state=random_state)
 
         X_train, y_train = train[self.features], train[self.target_column]
         X_test, y_test = test[self.features], test[self.target_column]
 
-        model = RandomForestClassifier(n_estimators=500,
-                                       min_samples_leaf=5,
-                                       max_features=0.2,
-                                       n_jobs=-1, 
-                                       max_depth=10,
-                                       oob_score=True, 
-                                       random_state=1)
+        model = RandomForestClassifier(n_estimators=n_estimators,
+                                       min_samples_leaf=min_samples_leaf,
+                                       max_features=max_features,
+                                       n_jobs=n_jobs,
+                                       oob_score=oob_score, 
+                                       random_state=random_state)
         model.fit(X_train, y_train)
 
         if permutation:
-            self.feature_importances = importances(model, X_test, y_test, n_samples=-1)
+            self.feature_importances = rfpimp.importances(model, X_test, y_test, n_samples=-1)
         else:
             self.feature_importances = pd.DataFrame({
                 'Importance': model.feature_importances_,
@@ -438,15 +591,24 @@ class FeatureSelector(General):
                     y=self.feature_importances.index[:top])
         plt.show()
 
-    def export_top_features(self, filename='top_features.json', top=30, silent=False):
+    def export_top_features(self, filename='top_features.json', top=30, 
+                            permutation_threshold=0.0005, silent=False):
         """Export top features for model creation.
         
         Parameters:
             filename (str): filename for saving top features
             top (int): top N features, which will be saved
+            permutation_threshold (float): permutation importance threshold for selecting top features,
+                                           used only if self.permutation=True, otherwise, top will be used
             silent (bool): don't output any information
         """
-        top_features = self.feature_importances.index.tolist()[:top]
+        top = len(self.features) if len(self.features) < top else top
+        
+        if self.permutation:
+            top_features = self.feature_importances[self.feature_importances.Importance > permutation_threshold].index.tolist()
+        else:
+            top_features = self.feature_importances.index.tolist()[:top]
+        
         top_features_json = []
         for subset in self.feature_sets:
             features = [i for i in subset['features'] if i in top_features]
@@ -461,331 +623,342 @@ class FeatureSelector(General):
         with open(filename, 'w') as f:
             json.dump(top_features_json, f)
         if not silent:
-            print('Top features exported to file {}'.format(filename))
+            print(f'Top {len(top_features)} features exported to file {filename}')
     
-    def run(self, report_date, target_source, filename, target_column='label', feature_source=None,
-            teradata_dsn='dsn', feature_sets='all', except_sets=None, except_features=None, 
+    def run(self, source, filename, target_column='label', id_column='client_id', feature_source=None,
+            feature_sets='all', except_sets=None, except_features=None, 
             missing_threshold=0.7, disbalance_threshold=0.7, collinear_threshold=0.9,    
-            permutation=False, top=30, silent=False):
+            top=30, permutation=True, permutation_threshold=0.0005, silent=False):
         """Run feature selection procedure step-by-step.
         
         Parameters:
-            report_date (str): report date, format: '2019-01-01'
-            target_source (str): table name with target
+            source (str): table name with target
+            filename (str): filename for saving top features
             target_column (str): column name with target
+            id_column (str): column name with id
             feature_source (str): path to file with feature names
-            teradata_dsn (str): name of ODBC connection
             feature_sets (str or list of str): 
                 'all' - load all features, 
-                'dmsc' - load only dmsc features, 
+                'main' - load only main features, 
                 if list - names of feature sets for loading, available names: 
-                        'dmsc_numerical', 'dmsc_binary', 'dmsc_categorical', 
-                        'dmx_be', 'dmx_chrgd', 'dmx_dsuite', 'dmx_mc', 'dmx_scd2'
+                        'set1', 'set2', 'set3', 'set4', 'set5'
             except_sets (None or str or list of str): if not None, this feature set(s) won't be loaded
             except_features (None or str or list of str): if not None, this feature(s) won't be loaded
             missing_threshold (float): threshold missing fraction
             disbalance_threshold (float): threshold disbalance fraction
             collinear_threshold (float): threshold corellation coefficient
-            permutation (bool): use permutation importance
-            filename (str): filename for saving top features
             top (int): top N features, which will be saved
+            permutation (bool): use permutation importance
+            permutation_threshold (float): permutation importance threshold for selecting top features,
+                                           used only if permutation=True, otherwise, top will be used
             silent (bool): don't output any information
         """
-        self.load_data(report_date=report_date, target_source=target_source, 
-                       target_column=target_column, feature_source=feature_source,
-                       teradata_dsn=teradata_dsn, feature_sets=feature_sets, 
+        self.load_data(source=source, target_column=target_column, id_column=id_column,
+                       feature_source=feature_source, feature_sets=feature_sets, 
                        except_sets=except_sets, except_features=except_features, 
-                       silent=silent)
+                       silent=silent)    
         self.identify_missing(threshold=missing_threshold, silent=silent)
         self.identify_disbalance(threshold=disbalance_threshold, silent=silent)
         self.identify_collinear(threshold=collinear_threshold, silent=silent)
         self.drop_useless(silent=silent)
         self.calculate_feature_importances(permutation=permutation, silent=silent)
-        self.export_top_features(filename=filename, top=top, silent=silent)
+        self.export_top_features(filename=filename, top=top, permutation_threshold=permutation_threshold, silent=silent)
         self.plot_feature_importances(top=top)
-        
-        
-def plot_feature_importance(model, feature_names, top=50):
-    """Plot feature importance for existing model.
-    
-    Parameters:
-        model (model): sklearn or LightGBM model.
-        feature_names (list of str): List with names of features.
-        top (int): N of features, which will be shown on feature importances plot.
-    
-    Returns:
-        None.
-        
-    Note:
-        Function makes a plot.
-    """
-
-    import pandas as pd
-    import matplotlib.pyplot as plt
-    import seaborn as sns
-    
-    if 'lightgbm' in str(type(model)):
-        importances = model.feature_importance()
-    else:
-        importances = model.feature_importances_
-        
-    top = len(feature_names) if len(feature_names) < top else top
-    imp = pd.Series(importances, index=feature_names).sort_values(ascending=False)
-    plt.figure(figsize=(8, 0.25 * top))
-    sns.barplot(x=imp[:top], y=imp.index[:top])
-    plt.show()
-    
-    
-def plot_roc_curve(test, predict, labels, figsize=(10,8)):
-    """
-    Plot ROC curve for predicted probabilities and calculate ROC-AUC.
-    
-    Parameters:
-        test (list of int): List with target values.
-        predict (list of float): List with predicted probabilities.
-        labels (list of str): Labels for curves.
-        figsize (tuple of int): Size of plot.
-        
-    Returns:
-        None.
-        
-    Note:
-        Function makes a plot.
-    """
-    
-    import numpy as np
-    import matplotlib.pyplot as plt
-    from sklearn.metrics import roc_curve, auc
-    
-    if (str(type(test)) != "<class 'list'>") | \
-       (str(type(predict)) != "<class 'list'>") | \
-       (str(type(labels)) != "<class 'list'>"):
-        return 'Error: test, predict or labels is not a list'
-    elif (len(test) != len(predict)) & (len(test) != len(labels)):
-        return 'Error: lenghs of test, predict and labels mismatch'
-    else:
-        plt.figure(figsize=figsize)
-        plt.title("ROC curve", fontsize=12)
-        
-        for i in range(len(test)):
-            fpr, tpr, _ = roc_curve(test[i], predict[i])
-            roc_auc = auc(fpr, tpr)
-            plt.plot(fpr, tpr, label='AUC={}'.format(np.round(roc_auc, 4)) + ', ' + labels[i])
-
-        plt.plot([0, 1], [0, 1], color='black', linestyle='--')
-        plt.legend()
-        plt.xlabel('False positive rate', fontsize=12)
-        plt.ylabel('True positive rate', fontsize=12)
-        plt.show()
-        
-        
-def calculate_feature_importance(
-    data, target, fillna=True, fill_val=-1, test_size=0.20, stratify_by_target=True, shuffle=True, random_state=1,
-    features=None, n_estimators=500, min_samples_leaf=5, max_features = 0.2, n_jobs=3, max_depth=10, oob_score=True,
-    n_samples=-1, plot=True, top=30, save_to_file=True, filename='importances.csv', sep=';', decimal=',', 
-    encoding='cp1251', permutation=True):
-    """
-    Calculate permutation importance for given dataset.
-    
-    Parameters:
-        data (pandas DataFrame): Train dataset.
-        target (str): Column name with target values.
-        fillna (bool): If True - fill NA values by fill_val (by default).
-        fill_val (int, float, or str): Value for fill NA values.
-        test_size (float): Fraction of data, which will be used as test set for train model.
-        stratify_by_target (bool): If True - data will be splitted by target values.
-        shuffle (bool): Shuffle data before splitting.
-        random_state (int): Random state for model and splitting data.
-        features (list of str): List with feature names. If None - all columns except target will be used as features.
-        n_estimators (int): n_estimators parameter for RandomForestClassifier.
-        min_samples_leaf (int): min_samples_leaf parameter for RandomForestClassifier.
-        max_features (int): max_features parameter for RandomForestClassifier.
-        n_jobs (int): n_jobs parameter for RandomForestClassifier.
-        max_depth (int): max_depth parameter for RandomForestClassifier.
-        oob_score (int): oob_score parameter for RandomForestClassifier.
-        n_samples (int): n_samples parameter for rfpimp importance.
-        plot (bool): Plot graph with feature importances.
-        top (int): N of features, which will be shown on feature importances plot.
-        save_to_file (bool): Save feature importances to file.
-        filename (str): Filename with feature importances.
-        sep (str): Set separator for file with feature importances.
-        decimal (str): Set decimal delimiter for file with feature importances.
-        encoding (str): Set encoding for file with feature importances.
-        permutation (bool): If True - permutation importance will be used, otherwise - standard feature importance.
-    
-    Returns:
-        model (sklearn model): sklearn RandomForestClassifier, used for calculation of feature importances.
-        importance (pandas DataFrame): DataFrame with feature importances.
-    
-    Note:
-        If plot is True, function makes a plot with feature importances.
-    """
-
-    import pandas as pd
-    from sklearn.model_selection import train_test_split
-    from sklearn.ensemble import RandomForestClassifier
-    from rfpimp import importances
-    import matplotlib.pyplot as plt
-    import seaborn as sns
-    
-    if data.isnull().values.any() & fillna:
-        data = data.fillna(fill_val)
-    if features is None:
-        features = list(set(data.columns.tolist()) - {target})
-    
-    train, test = train_test_split(data, 
-                                   test_size=test_size, 
-                                   stratify=data[target] if stratify_by_target else None, 
-                                   shuffle=shuffle, 
-                                   random_state=random_state)
-    
-    X_train, y_train = train[features], train[target]
-    X_test, y_test = test[features], test[target]
-    
-    model = RandomForestClassifier(n_estimators=n_estimators,
-                                   min_samples_leaf=min_samples_leaf,
-                                   max_features=max_features,
-                                   n_jobs=n_jobs, 
-                                   max_depth=max_depth,
-                                   oob_score=oob_score, 
-                                   random_state=random_state)
-    model.fit(X_train, y_train)
-    
-    if permutation:
-        importance = importances(model, X_test, y_test, n_samples=n_samples)
-    else:
-        importance = pd.DataFrame({'Importance': model.feature_importances_, 
-                                   'Feature': features}).sort_values(by='Importance', ascending=False).set_index('Feature')
-    
-    if save_to_file:
-        importance.to_csv(filename, sep=sep, decimal=decimal, encoding=encoding)
-    
-    if plot:
-        top = len(features) if len(features) < top else top
-        plt.figure(figsize=(8, int(0.25 * top)))
-        sns.barplot(x=importance.Importance[:top], y=importance.index[:top])
-        plt.show()
-
-    return model, importance
 
 
-def plot_confusion_matrix(y_true, y_pred, prob=True, threshold=0.5, title='Confusion matrix', figsize=(6, 5)):
-    """
-    Plot confusion matrix for given threshold value.
-    
-    Parameters:
-        y_true (list of int): True labels.
-        y_pred (list of int or float): Predicted labels or probabilities.
-        prob (bool): True if y_pred is probabilities.
-        threshold (float): Threshold value for predicted probabilities. Need for convertion of probabilities to labels.
-        title (str): Title of confusion matrix.
-        figsize (tuple of int): Size of plot.
+class ModelBuilder(DataKeeper):
+    def __init__(self, db, random_state=1):
+        """Model Creator initialization.
         
-    Returns:
-        None.
-        
-    Note:
-        Function makes a plot.
-    """
+        Parameters:
+            db (db_tools): DB class from db_tools
+        """
+        super().__init__()
+        self.db = db
+        self.random_state=random_state
 
-    import itertools
-    from sklearn.metrics import confusion_matrix
-    import matplotlib.pyplot as plt
-    import numpy as np
-    from sklearn.metrics import precision_score, recall_score, roc_auc_score
-    
-    if prob:
-        y_pred = (y_pred > threshold).astype(int)
-    
-    cm = confusion_matrix(y_true, y_pred)
-    
-    plt.figure(figsize=figsize)
-    plt.imshow(cm, interpolation='nearest', cmap=plt.cm.Blues)
-    plt.title(title, color='black', fontsize=12)
-    plt.xticks([0, 1], ['0', '1'], color='black', fontsize=12)
-    plt.yticks([0, 1], ['0', '1'], color='black', fontsize=12)
-    plt.colorbar()
- 
-    thresh = cm.max() / 2.
-    for i, j in itertools.product(range(cm.shape[0]), range(cm.shape[1])):
-        plt.text(j, i, format(cm[i, j], 'd'),
-                 horizontalalignment="center",
-                 color="white" if cm[i, j] > thresh else "black", fontsize=12)
- 
-    plt.tight_layout()
-    plt.ylabel('True', color='black', fontsize=12)
-    plt.xlabel('Predict', color='black', fontsize=12)
-    plt.show()
-    
-    if prob:
-        print('Threshold: {}'.format(threshold))
-    
-    print("Precision: {}%".format(round(precision_score(y_true, y_pred) * 100, 1)))
-    print("Recall: {}%".format(round(recall_score(y_true, y_pred) * 100, 1)))
-    print("AUC: {}%".format(round(roc_auc_score(y_true, y_pred) * 100, 1)))
-    
-    
-def plot_predicted_probability(
-    data, label_col='label', pred_col='pred', frac=1.0, title='Predicted probabilities, distributed by label', 
-    figsize=(9,8), kde=True):
-    """Plot distributions of predicted probabilities, divided by true labels.
-    
-    Parameters:
-        data (pandas DataFrame): Pandas DataFrame with true labels and predicted probabilities.
-        label_col (str): Column name with true labels.
-        pred_col (str): Column name with predicted probabilities.
-        frac (float): Fraction of data, which will be used for plot (for large datasets).
-        title (str): Title of plot.
-        figsize (tuple of int): Size of plot.
+    def load_data(self, source, target_column='target', id_column = 'client_id',
+                  feature_source=None, silent=False):
+        """Load data for feature selection.
         
-    Returns:
-        None.
+        Parameters:
+            source (str): table name with target
+            target_column (str): column name with target
+            id_column (str): column name with id
+            feature_source (str): path to file with feature names
+            silent (bool): don't output any information
+        """
         
-    Note:
-        Function makes a plot.
-    """
+        if not silent:
+            print("Loading data ...")
+        
+        self.target_column = target_column
+        self.id_column = id_column
+        
+        loader = Loader(self.db)
+        self.data = loader.load(source=source, target_column=target_column, id_column=id_column,
+                                feature_source=feature_source, silent=silent)
+              
+        self.features = [col for col in self.data.columns if col not in [self.id_column, self.target_column]]
+        
+        if not silent:
+            print('All data loaded successfully, shape: {}'.format(self.data.shape))
+    
+    def encode_cats(self, filename='cat_dict.npy', silent=False):
+        """Encode categorical features.
+        
+        Parameters:
+            filename (str): filename for saving dictionary with categores ids for categorical features
+            silent (bool): don't output any information
+        """
+        if np.sum(self.data[self.features].dtypes == 'object') > 0:
+            
+            self.cat_dict = {}
+            for var in self.data.dtypes[self.data.dtypes == 'object'].index.tolist():
+                self.data[var] = self.data[var].astype('category')
+                self.cat_dict[var] = self.data[var].cat.categories
+                self.data[var] = self.data[var].cat.codes
+            
+            np.save(filename, self.cat_dict)
+            if not silent:
+                print(f'Categorical features encoded, dictionary saved to {filename}')
+        else:
+            if not silent:
+                print('Categorical features not found')
 
-    import numpy as np
-    import matplotlib.pyplot as plt
-    import seaborn as sns
-    
-    plt.figure(figsize=figsize)
-    plt.title(title, fontsize=12)
-    sns.distplot(data[data[label_col] == 0][pred_col], kde=kde, bins=np.linspace(0, 1, 51), 
-                 label='{} = 0'.format(label_col))
-    sns.distplot(data[data[label_col] == 1][pred_col], kde=kde, bins=np.linspace(0, 1, 51), 
-                 label='{} = 1'.format(label_col))
-    plt.xlabel('Probability', fontsize=12)
-    plt.legend()
-    plt.show()
-    
-    
-def plot_precision_recall_curve(test, predict, figsize=(10,8)):
-    """Plot Precision-Recall curve for predicted probabilities.
-    
-    Parameters:
-        test (list of int): True labels.
-        predict (list of float): Predicted probabilities.
-        figsize (tuple of int): Size of plot.
+    def fillna(self, value=-1, silent=False):
+        """Fill NA values in data.
         
-    Returns:
-        None.
+        Parameters:
+            value (int or float): fill value
+            silent (bool): don't output any information
+        """
+        if self.data.isnull().values.any():
+            self.data = self.data.fillna(value)
+            if not silent:
+                print('NA values replaced by {}'.format(value))
+            
+    def create_holdout(self, test_size=0.2, shuffle=True, silent=False):
+        """Split data to train and holdout datasets.
         
-    Note:
-        Function makes a plot.
-    """
+        Parameters:
+            test_size (float): holdout fraction
+            shuffle (bool): shuffle data before split
+            silent (bool): don't output any information
+        """
+        self.train, self.holdout = train_test_split(
+            self.data, test_size=test_size, stratify=self.data[self.target_column], shuffle=True, random_state=self.random_state
+        )
+        if not silent:
+            print(f"Holdout created, train shape: {self.train.shape}, holdout shape: {self.holdout.shape}")
     
-    from sklearn.metrics import average_precision_score, precision_recall_curve
-    import matplotlib.pyplot as plt
-    
-    average_precision = average_precision_score(test, predict)
-    precision, recall, _ = precision_recall_curve(test, predict, pos_label=1)
-    plt.figure(figsize=figsize)
-    plt.step(recall, precision, color='b', alpha=0.2, where='post')
-    plt.fill_between(recall, precision, step='post', alpha=0.2, color='b')
-    plt.xlabel('Recall', fontsize=12)
-    plt.ylabel('Precision', fontsize=12)
-    plt.ylim([0.0, 1.0])
-    plt.xlim([0.0, 1.0])
-    plt.title('2-class Precision-Recall curve: AP={0:0.2f}'.format(average_precision), fontsize=12)
-    plt.show()
+    def optimize_params(self, params, cv_splits=4, cv_shuffle=True, init_points=5, n_iter=100, silent=False):
+        """Optimize model params using Bayesian optimization.
+        
+        Parameters:
+            params (dict): parameter search space
+            cv_splits (int): number of folds
+            cv_shuffle (bool): use shuffle before splitting to folds
+            init_points (int) initial points for searching
+            n_iter (int): search iterations
+            silent (bool): don't output any information
+        """
+        if not silent:
+            print("Optimizing params ...")
+        
+        self.params = params
+        self.cv = StratifiedKFold(n_splits=cv_splits, shuffle=cv_shuffle, random_state=self.random_state)
+        self.bo = BayesianOptimization(self.model_evaluate, params, verbose=(1 if not silent else 0))
+        self.bo.maximize(init_points=init_points, n_iter=n_iter)
+        
+        if not silent:
+            print("Params optimized, train final model ...") 
+        
+        self.model = lgb.LGBMClassifier(
+            random_state=self.random_state, 
+            objective='binary', 
+            metric='auc', 
+            is_unbalance=True,
+            num_leaves=int(self.bo.max['params']['num_leaves']),
+            num_iterations=int(self.bo.max['params']['num_iterations']),
+            min_data_in_leaf=int(self.bo.max['params']['min_data_in_leaf']),
+            max_depth=int(self.bo.max['params']['max_depth']),
+            bagging_fraction=self.bo.max['params']['bagging_fraction'],
+            feature_fraction=self.bo.max['params']['feature_fraction'],
+            max_bin=int(self.bo.max['params']['max_bin']),
+            colsample_bytree=self.bo.max['params']['colsample_bytree'],
+            learning_rate=self.bo.max['params']['learning_rate'],
+            subsample=self.bo.max['params']['subsample'],
+            min_gain_to_split=self.bo.max['params']['min_gain_to_split']
+        )
+        self.model.fit(self.train[self.features], self.train[self.target_column])
+        
+    def model_evaluate(self, **params):
+        """Evaluation function for Bayesian optimization.
+
+        Parameters:
+            params (dict): dictionary with model parameters
+        """
+        fold_auc = []
+        for train_idx, test_idx in self.cv.split(self.train[self.features], self.train[self.target_column]):
+            
+            train_set = self.train.iloc[train_idx]
+            test_set = self.train.iloc[test_idx]
+            
+            model = lgb.LGBMClassifier(
+                random_state=1, 
+                objective='binary', 
+                metric='auc', 
+                is_unbalance=True,
+                num_leaves=int(params['num_leaves']),
+                num_iterations=int(params['num_iterations']),
+                min_data_in_leaf=int(params['min_data_in_leaf']),
+                max_depth=int(params['max_depth']),
+                bagging_fraction=params['bagging_fraction'],
+                feature_fraction=params['feature_fraction'],
+                max_bin=int(params['max_bin']),
+                colsample_bytree=params['colsample_bytree'],
+                learning_rate=params['learning_rate'],
+                subsample=params['subsample'],
+                min_gain_to_split=params['min_gain_to_split']
+            )
+            
+            model.fit(train_set[self.features], train_set[self.target_column])
+            y_pred = model.predict_proba(test_set[self.features])[:, 1]
+            fold_auc.append(roc_auc_score(y_true=test_set[self.target_column], y_score=y_pred))
+
+        return np.mean(fold_auc)
+        
+    def show_metrics(self, metrics=['roc_curve', 'pr_curve', 'prob_hist', 'conf_matrix'], 
+                     prob_kde=True, cm_threshold=0.5, figsize=(10,8)):
+        """Show metrics of model, calculated on holdout dataset.
+        
+        Parameters:
+            metrics (list of str): which metrics to show, available values:
+                    'roc_curve' - plot roc curves, for train and holdout
+                    'pr_curve' - plot precision-recall curve for holdout
+                    'prob_hist' - plot histogram of probabilities for holdout
+                    'conf_matrix' - plot confusion matrix for holdout
+            prob_kde (bool): use kernel density estimation in prob_hist
+            cm_threshold (float): threshold value for holdout probabilities in conf_matrix
+            figsize (tuple of int): figure size
+        """
+        
+        if 'roc_curve' in metrics:
+            plot_roc_curve(sets=[
+                (self.train[self.target_column], self.model.predict_proba(self.train[self.features])[:, 1], 'train'),
+                (self.holdout[self.target_column], self.model.predict_proba(self.holdout[self.features])[:, 1], 'holdout')
+            ], figsize=figsize)
+        
+        if 'pr_curve' in metrics:
+            plot_precision_recall_curve(
+                self.holdout[self.target_column], 
+                self.model.predict_proba(self.holdout[self.features])[:, 1], 
+                figsize=figsize
+            )
+        
+        if 'prob_hist' in metrics:
+            plot_predicted_probability(
+                self.holdout[self.target_column],  
+                self.model.predict_proba(self.holdout[self.features])[:, 1],
+                figsize=figsize,
+                kde=prob_kde
+            )
+            
+        if 'conf_matrix' in metrics:
+            plot_confusion_matrix(
+                self.holdout[self.target_column],  
+                self.model.predict_proba(self.holdout[self.features])[:, 1], 
+                threshold=cm_threshold
+            )
+        
+    def save_model(self, filename, silent=False, plot_hist=True, figsize=(10,8)):
+        joblib.dump(self.model, filename)
+        
+        if not silent:
+            print(f"Model saved to file {filename}")
+        
+        if plot_hist:
+            plt.figure(figsize=figsize)
+            plt.title("Histogram of probabilities", fontsize=12)
+            sns.distplot(self.model.predict_proba(self.holdout[self.features])[:, 1])
+            plt.xlabel('Probability', fontsize=12)
+            plt.show()
+            
+    def run(self, source, params, target_column='target', id_column = 'client_id',
+            feature_source=None, encode_filename='cat_dict.npy', na_value=-1,
+            holdout_size=0.2, holdout_shuffle=True, cv_splits=4, cv_shuffle=True,
+            init_points=5, n_iter=100, prob_kde=True, cm_threshold=0.5, 
+            metrics=['roc_curve', 'pr_curve', 'prob_hist', 'conf_matrix'], 
+            figsize=(10,8), model_filename='model.sav', plot_hist=True, silent=False):
+        """Run model builder step-by-step.
+        
+        Parameters:
+            source (str): table name with target
+            params (dict): parameter search space for params optimizer
+            target_column (str): column name with target
+            id_column (str): column name with id
+            feature_source (str): path to file with feature names
+            encode_filename (str): filename for saving dictionary with categories for categorical features
+            na_value (int or float): value for filling NA values
+            holdout_size (float): holdout fraction
+            holdout_shuffle (bool): shuffle data before split holdout
+            cv_splits (int): number of folds for params optimizer
+            cv_shuffle (bool): use shuffle before splitting to folds for params optimizer
+            init_points (int) initial points for searching for params optimizer
+            n_iter (int): search iterations for params optimizer
+            prob_kde (bool): use kernel density estimation in prob_hist
+            cm_threshold (float): threshold value for holdout probabilities in conf_matrix
+            metrics (list of str): which metrics to show, available values:
+                    'roc_curve' - plot roc curves, for train and holdout
+                    'pr_curve' - plot precision-recall curve for holdout
+                    'prob_hist' - plot histogram of probabilities for holdout
+                    'conf_matrix' - plot confusion matrix for holdout
+            figsize (tuple of int): figure sizes
+            plot_hist (bool): plot histogram of probabilities for holdout
+            silent (bool): don't output any information
+        """
+        self.load_data(source=source, target_column=target_column, id_column=id_column,
+                       feature_source=feature_source, silent=silent)
+        self.encode_cats(filename=encode_filename, silent=silent)
+        self.fillna(value=na_value, silent=silent)
+        self.create_holdout(test_size=holdout_size, shuffle=holdout_shuffle, silent=silent)
+        self.optimize_params(cv_splits=cv_splits, cv_shuffle=cv_shuffle, params=params, n_iter=n_iter, silent=silent)
+        self.save_model(filename=model_filename, silent=silent, plot_hist=plot_hist, figsize=figsize)
+        self.show_metrics(metrics=metrics, prob_kde=prob_kde, cm_threshold=cm_threshold, figsize=figsize)
+
+
+class Scorer(DataKeeper):
+    def __init__(self, db):
+        """Scorer init. 
+        
+        Parameters:
+            db (db_tools): DB class from db_tools
+        """
+        super().__init__()
+        self.db = db
+        
+    def load_data(self, source, feature_source, id_column = 'client_id', silent=False):
+        """Load data for feature selection.
+        
+        Parameters:
+            source (str): table name with target
+            feature_source (str): path to file with feature names
+            id_column (str): column name with id
+            silent (bool): don't output any information
+        """
+        
+        if not silent:
+            print("Loading data ...")
+        
+        self.id_column = id_column
+        
+        loader = Loader(self.db)
+        self.data = loader.load(source=source, feature_source=feature_source, id_column=id_column, silent=silent)
+        self.features = [col for col in self.data.columns if col not in [self.id_column, self.target_column]]
+        
+        if not silent:
+            print('All data loaded successfully, shape: {}'.format(self.data.shape))
+
+
+

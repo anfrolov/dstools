@@ -10,11 +10,12 @@ config - конфигурационные файлы
 |- settings.toml - публичные настройки проекта (файлы, таблицы, признаки)
 |- .secrets.toml - секретные настройки проекта (логины, пароли)
 data - данные
-examples - примеры проекта
-|- load_data.ipynb - загрузка данных в базу
-|- research.ipynb - создание модели
-|- train.ipynb - обучение модели
-|- scoring.ipynb - скоринг данных
+model - модель и артефакты
+notebooks - jupyter ноутбуки
+|- loading_data.ipynb - загрузка данных в базу
+|- create_model.ipynb - создание модели
+|- update_model.ipynb - обучение модели
+|- scoring_data.ipynb - скоринг данных
 src - Python код
 |- db_tools.py - классы для работы с базами данных
 |- ds_tools.py - классы и функции для построения моделей
