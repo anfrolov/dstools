@@ -708,7 +708,7 @@ class ModelBuilder(DataKeeper):
         """Encode categorical features.
         
         Parameters:
-            filename (str): filename for saving dictionary with categores ids for categorical features
+            filename (str): filename for saving dictionary with categories ids for categorical features
             silent (bool): don't output any information
         """
         if np.sum(self.data[self.features].dtypes == 'object') > 0:
@@ -955,10 +955,135 @@ class Scorer(DataKeeper):
         
         loader = Loader(self.db)
         self.data = loader.load(source=source, feature_source=feature_source, id_column=id_column, silent=silent)
-        self.features = [col for col in self.data.columns if col not in [self.id_column, self.target_column]]
+        self.features = [col for col in self.data.columns if col not in [self.id_column]]
         
         if not silent:
             print('All data loaded successfully, shape: {}'.format(self.data.shape))
+
+    def load_model(self, model, cat_dict=None, silent=False):
+        """Load model filename with artefacts.
+        
+        Parameters:
+            model (str): path to file with model
+            cat_dict (str) path to file with dict for categorial features
+            silent (bool): don't output any information
+        """
+        self.model_filename = model
+        self.cat_dict_filename = cat_dict
+        
+        self.model = joblib.load(self.model_filename)
+        if not silent:
+            print(f"Model loaded from: {self.model_filename}")
+        
+        if cat_dict:
+            self.cat_dict = np.load(self.cat_dict_filename, allow_pickle=True).item() 
+            if not silent:
+                print(f"Categorical dictionary loaded from: {self.cat_dict_filename}")
+            
+    def encode_cats(self, silent=False):
+        """Encode categorical features.
+        
+        Parameters:
+            silent (bool): don't output any information
+        """
+        
+        if self.cat_dict_filename:
+            cats = df.dtypes[df.dtypes == 'object'].index.tolist()
+            for var in cats:
+                self.data[var] = pd.Categorical(self.data[var].values, categories=self.cat_dict[var])
+                self.data[var] = self.data[var].cat.codes
+    
+            if not silent:
+                print(f'Categorical features encoded')
+            
+    def fillna(self, value=-1, silent=False):
+        """Fill NA values in data.
+        
+        Parameters:
+            value (int or float): fill value
+            silent (bool): don't output any information
+        """
+        if self.data.isnull().values.any():
+            self.data = self.data.fillna(value)
+            if not silent:
+                print('NA values replaced by {}'.format(value))
+                
+    def scoring(self, pred_col='pred', silent=False):
+        """Scoring data. 
+        
+        Parameters:
+            pred_col (str): column name with predicted probability
+            silent (bool): don't output any information
+        """
+        self.pred_col = pred_col
+        
+        if not silent:
+            print("Scoring data ...")
+        
+        self.data[self.pred_col] = self.model.predict_proba(self.data[self.features])[:, 1]
+        
+        if not silent:
+            print("Scoring completed")
+            
+    def save_scoring(self, filename, table=None, silent=False):
+        """Save scoring. 
+        
+        Parameters:
+            filename (str): path to file with scoring
+            table (str): table name with scoring
+            silent (bool): don't output any information
+        """
+        if not silent:
+            print("Saving scoring ...")
+        
+        self.data[[self.id_column, self.pred_col]].to_csv(filename, decimal=".", sep=",", index=False)
+        if not silent:
+            print(f"Scoring saved to file: {filename}")
+        
+        if table:
+            self.db.load(filename=filename, table=table, primary_key=self.id_column)
+            
+            if not silent:
+                print(f"Scoring loaded to table: {table}")
+
+    def plot_hist(self, frac=1.0, figsize=(10,8)):
+        """Plot histogram of predicted probabilities.
+        
+        Parameters:
+            frac (float): fraction of scoring data
+            figsize (tuple of int): figure size
+        """
+        plt.figure(figsize=figsize)
+        plt.title("Histogram of probabilities", fontsize=12)
+        sns.distplot(self.data.sample(frac=frac)[self.pred_col])
+        plt.xlabel('Probability', fontsize=12)
+        plt.show()
+
+    def run(self, source, feature_source, model, cat_dict=None, id_column = 'client_id', 
+            na_value=-1, pred_col='pred', scoring_filename='scoring.csv', scoring_table='scoring',
+            plot=True, hist_frac=1.0, figsize=(10,8), silent=False):
+        """Run scoring step-by-step.
+        
+        Parameters:
+            source (str): table name with target
+            feature_source (str): path to file with feature names
+            model (str): path to file with model
+            cat_dict (str) path to file with dict for categorial features
+            id_column (str): column name with id
+            na_value (int or float): fill NA values
+            pred_col (str): column name with predicted probability
+            scoring_filename (str): path to file with scoring
+            scoring_table (str): table name with scoring
+            silent (bool): don't output any information
+        """
+        self.load_data(source=source, feature_source=feature_source, id_column=id_column, silent=silent)
+        self.load_model(model=model, cat_dict=cat_dict, silent=silent)
+        self.encode_cats(silent=silent)
+        self.fillna(value=na_value, silent=silent)
+        self.scoring(pred_col=pred_col, silent=silent)
+        self.save_scoring(filename=scoring_filename, table=scoring_table, silent=silent)
+        if plot:
+            self.plot_hist(frac=hist_frac, figsize=figsize)
 
 
 
